@@ -8,6 +8,32 @@
 
 처음 맡는 사람은 [HANDOVER.md](HANDOVER.md)(인수인계)부터 읽으세요.
 
+## 시스템 구성도
+
+### 1. 전체 시스템 및 폐쇄망 배포 구성
+
+사내 폐쇄망 내부의 **Core Platform(Docker Compose)** 과 **GPU Model Pool** 의 경계, 그리고 외부 통신이 차단된 일회용 **Agent Sandbox(`--network none`)** 의 물리·논리적 흐름입니다.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/arch-system-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/arch-system.png">
+    <img alt="Local AI Agent Platform — System Architecture" src="docs/arch-system.png" width="100%">
+  </picture>
+</p>
+
+### 2. 실행 모드 라우팅 및 자율 에이전트 검증 루프
+
+요청 접수 후 **Mode Router**와 **Context & RAG**를 거쳐 **Quick · Thinking** 파이프라인으로 처리되거나, **Agent Mode**의 5단계 자율 실행·결정론적 검증·자가 수정(`retry <= 2`) 상태 기계로 이어지는 단계별 흐름입니다.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/arch-workflow-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/arch-workflow.png">
+    <img alt="Execution Modes & Agent Workflow" src="docs/arch-workflow.png" width="100%">
+  </picture>
+</p>
+
 ## 검증한 범위와 하지 못한 범위
 
 | 구분 | 내용 |
