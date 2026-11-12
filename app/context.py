@@ -6,9 +6,13 @@ SLOTS = {"retrieved": 0.35, "history": 0.25, "state": 0.10, "output": 0.15}   # 
 COMPRESS_AT = 0.7
 
 
-def tokens(text: str) -> int:
+def tokens(content: str | list | None) -> int:
     """토크나이저 없이 쓰는 보수적 추정. 한글 한 글자를 1토큰, 영문 세 글자를 1토큰으로 센다."""
-    return len(text.encode()) // 3 + 1
+    if not content:
+        return 0
+    if isinstance(content, list):
+        return sum(tokens(p.get("text", "")) if p.get("type") == "text" else 256 for p in content)
+    return len(content.encode()) // 3 + 1
 
 
 def take(items: list[str], budget: int) -> list[str]:

@@ -2,7 +2,7 @@
 import pytest
 from conftest import model_calls, script
 
-from app import context
+from app import context, runtime, validator
 
 MODEL = {"capabilities": {"context": 1000}}
 
@@ -27,6 +27,18 @@ def test_retrieved_stops_at_budget_and_state_goes_last():
 def test_oversized_input_is_rejected():
     with pytest.raises(ValueError):
         context.assemble(MODEL, "quick", "시스템", [], "", [], "다" * 1000)
+
+
+def test_multimodal_tokens_and_state_reinjection():
+    msg = {"role": "user", "content": [{"type": "text", "text": "표 분석"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,x"}}]}
+    assert context.tokens(msg["content"]) > 256
+    updated = runtime._with_state(msg, "단계 1")
+    assert updated["content"][0]["text"].endswith("[작업 상태]\n단계 1") and len(updated["content"]) == 2
+
+
+def test_number_validator_ignores_code_blocks_but_catches_prose():
+    assert validator.numbers("```python\ndef is_leap_year(y):\n    return y % 400 == 0 and y % 100 != 0\n```", "") == []
+    assert validator.numbers("매출은 987,654원입니다.", "") != []
 
 
 def test_long_history_is_compressed_into_summary(alice):

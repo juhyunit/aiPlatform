@@ -13,12 +13,12 @@ MODE_SCHEMA = {"type": "object", "required": ["mode"], "additionalProperties": F
 THINKING_TOOLS = ["search", "list_files", "read_file", "run_python"]     # 읽기 전용 도구와 계산용 코드 실행
 
 
-async def candidates(run, model: str, need: tuple = ()) -> list[dict]:
+async def candidates(run, model: str, need: tuple = (), task: str = "chat") -> list[dict]:
     """정책 필터. 요청의 데이터 등급은 세션과 첨부의 태그에서 읽는다. 모델이 민감도를 추정하게 하지 않는다."""
     grade = (await db.q(run.user, """
         select greatest(s.grade, coalesce((select max(d.grade) from documents d where d.session_id = s.id), 0)) as grade
         from sessions s where s.id = %s""", (run.session_id,)))[0]["grade"]
-    cands = gateway.select(grade, model, need=need)
+    cands = gateway.select(grade, model, task=task, need=need)
     run.clear = gateway.clearance(cands[0])
     return cands
 
@@ -34,7 +34,7 @@ async def route(run, req) -> tuple[str, list[dict]]:
     if mode is None:    # 규칙으로 가르지 못한 요청만 모델이 분류한다
         out = await gateway.chat(run, cands, [{"role": "system", "content": prompts.load("router", cands[0]["id"])},
                                               {"role": "user", "content": req.message}], schema=MODE_SCHEMA, max_tokens=16)
-        mode = json.loads(out["content"])["mode"]
+        mode = gateway.parse_json(out["content"])["mode"]
     await run.emit("mode", {"mode": mode, "model": cands[0]["id"], "prompt_version": prompts.VERSION})
     return mode, cands
 

@@ -4,7 +4,9 @@
 """
 import json
 import os
+import re
 import time
+from pathlib import Path
 
 import httpx
 import yaml
@@ -12,14 +14,22 @@ import yaml
 from .policy import CONFIG, P, rank
 
 MODELS: list[dict] = yaml.safe_load(
-    open(os.environ.get("MODELS_FILE", CONFIG / "models.yaml"), encoding="utf-8"))["models"]
+    Path(os.environ.get("MODELS_FILE", CONFIG / "models.yaml")).read_text(encoding="utf-8"))["models"]
 BLOCK_SECONDS = 30
 _blocked: dict[str, float] = {}     # 모델 ID → 차단이 풀리는 시각
 _http = httpx.AsyncClient(timeout=httpx.Timeout(600, connect=5))
+_THINK = re.compile(r"<think>.*?</think>\s*", re.S)
+_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.S)
 
 
 class Denied(Exception):
     """정책이 허용한 모델이 없다."""
+
+
+def parse_json(text: str):
+    """모델이 JSON 앞뒤에 붙인 <think> 블록이나 코드 블록 표시를 걷어내고 파싱한다."""
+    cleaned = _FENCE.sub("", _THINK.sub("", text.strip()).strip())
+    return json.loads(cleaned)
 
 
 def clearance(model: dict) -> int:
@@ -39,7 +49,7 @@ def select(grade: int, model: str = "auto", task: str = "chat", need: tuple = ()
     else:
         line = P["pass_line"].get(task, 0)
         cands = sorted((m for m in cands if m["eval"].get(task, 0) >= line),
-                       key=lambda m: m["resources"]["vram_gb"])
+                       key=lambda m: (m["resources"]["vram_gb"], -m["eval"].get(task, 0)))
     if not cands:
         raise Denied(f"데이터 등급 '{P['grades'][grade]}'에 허용된 모델이 없습니다")
     return cands
@@ -63,9 +73,14 @@ def _as_text(messages: list[dict], tools: list[dict]) -> list[dict]:
         if m["role"] == "system":
             out.append({"role": "system", "content": m["content"] + guide})
         elif m.get("tool_calls"):
-            call = m["tool_calls"][0]["function"]
-            out.append({"role": "assistant", "content": json.dumps(
-                {"tool": call["name"], "arguments": json.loads(call["arguments"])}, ensure_ascii=False)})
+            for tc in m["tool_calls"]:
+                call = tc["function"]
+                try:
+                    args = json.loads(call["arguments"])
+                except json.JSONDecodeError:
+                    args = call["arguments"]
+                out.append({"role": "assistant", "content": json.dumps(
+                    {"tool": call["name"], "arguments": args}, ensure_ascii=False)})
         elif m["role"] == "tool":
             out.append({"role": "user", "content": "[도구 결과]\n" + m["content"]})
         else:
@@ -96,8 +111,10 @@ async def _call(model: dict, messages, tools, schema, reasoning, max_tokens, on_
                 continue
             chunk = json.loads(line[6:])
             usage = chunk.get("usage") or usage
-            for choice in chunk["choices"]:
-                delta, finish = choice["delta"], choice.get("finish_reason") or finish
+            for choice in chunk.get("choices") or []:
+                delta, finish = choice.get("delta") or {}, choice.get("finish_reason") or finish
+                if delta.get("reasoning_content"):
+                    first = first or time.monotonic()
                 if delta.get("content"):
                     first = first or time.monotonic()
                     content += delta["content"]
@@ -105,14 +122,15 @@ async def _call(model: dict, messages, tools, schema, reasoning, max_tokens, on_
                         await on_token(delta["content"])
                 for tc in delta.get("tool_calls") or []:      # 도구 호출은 조각으로 나뉘어 온다
                     first = first or time.monotonic()
-                    call = calls.setdefault(tc["index"], {"id": "", "name": "", "arguments": ""})
+                    fn = tc.get("function") or {}
+                    call = calls.setdefault(tc.get("index", 0), {"id": "", "name": "", "arguments": ""})
                     call["id"] += tc.get("id") or ""
-                    call["name"] += tc["function"].get("name") or ""
-                    call["arguments"] += tc["function"].get("arguments") or ""
+                    call["name"] += fn.get("name") or ""
+                    call["arguments"] += fn.get("arguments") or ""
 
-    tool_calls = list(calls.values())
+    tool_calls = [{**c, "id": c["id"] or f"call_{i}"} for i, c in sorted(calls.items())]
     if constrained:
-        out = json.loads(content)
+        out = parse_json(content)
         content = out.get("answer", "")
         if "tool" in out:
             tool_calls = [{"id": "call_0", "name": out["tool"],
@@ -157,10 +175,25 @@ async def chat(run, cands: list[dict], messages: list[dict], *, max_tokens: int,
 
 async def embed(texts: list[str], grade: int) -> tuple[str, list[list[float]]]:
     """임베딩. 생성 모델과 다른 프로세스의 임베딩 서버를 같은 정책 필터를 거쳐 부른다."""
-    model = select(grade, need=("embedding",))[0]
-    vectors = []
-    for i in range(0, len(texts), 32):
-        resp = await _http.post(model["endpoint"] + "/embeddings", json={"model": model["id"], "input": texts[i:i + 32]})
-        resp.raise_for_status()
-        vectors += [d["embedding"] for d in resp.json()["data"]]
-    return model["id"], vectors
+    cands = select(grade, need=("embedding",))
+    if not texts:
+        return cands[0]["id"], []
+    failed = []
+    for model in cands:
+        if _blocked.get(model["id"], 0) > time.time():
+            failed.append(model["id"])
+            continue
+        try:
+            vectors = []
+            for i in range(0, len(texts), 32):
+                resp = await _http.post(model["endpoint"] + "/embeddings",
+                                        json={"model": model["id"], "input": texts[i:i + 32]})
+                resp.raise_for_status()
+                vectors += [d["embedding"] for d in resp.json()["data"]]
+            return model["id"], vectors
+        except httpx.HTTPError as e:
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                raise
+            _blocked[model["id"]] = time.time() + BLOCK_SECONDS
+            failed.append(model["id"])
+    raise RuntimeError("응답할 수 있는 임베딩 서버가 없습니다: " + ", ".join(failed))

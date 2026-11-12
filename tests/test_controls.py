@@ -95,3 +95,5 @@ def test_image_names_cannot_escape_the_session(alice):
 def test_malformed_ids_are_rejected_not_crashed(alice):
     assert alice.get("/api/sessions/not-a-uuid/messages").status_code == 422
     assert alice.get("/api/sessions/not-a-uuid/files/x").status_code == 422
+    assert alice.post("/api/sessions", json={"title": "t", "grade": "invalid"}).status_code == 422
+    assert alice.post("/api/chat", json={"session_id": alice.session(), "message": "x", "mode": "invalid"}).status_code == 422

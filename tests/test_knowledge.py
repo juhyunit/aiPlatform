@@ -26,6 +26,12 @@ def test_chunk_follows_headings_and_never_splits_a_table():
     assert chunks[2]["text"] == table["text"]
 
 
+def test_chunk_splits_oversized_paragraph_along_lines():
+    long_para = "\n".join(f"{i}조 규정 본문 " + "가" * 80 for i in range(20))
+    chunks = knowledge.chunk([{"kind": "paragraph", "text": long_para, "page": 1}])
+    assert len(chunks) > 1 and all(knowledge.context.tokens(c["text"]) <= knowledge.CHUNK_TOKENS for c in chunks)
+
+
 def retrieved(client, sid, question, **kw) -> str:
     client.chat(sid, question, mode="quick", search=True, **kw)
     return model_calls()[-1]["messages"][-1]["content"]

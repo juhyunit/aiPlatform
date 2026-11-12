@@ -34,3 +34,8 @@ def test_denied_request_is_refused_and_audited(alice):
     assert r.status_code == 403
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         assert conn.execute("select action, user_id from audit_log order by id desc limit 1").fetchone() == ("denied", "alice")
+
+
+def test_parse_json_strips_thinking_tags_and_markdown_fences():
+    raw = "<think>\n복잡한 추론 과정\n</think>\n```json\n{\"mode\": \"thinking\"}\n```"
+    assert gateway.parse_json(raw) == {"mode": "thinking"}

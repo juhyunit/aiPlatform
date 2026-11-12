@@ -6,7 +6,7 @@ from psycopg.types.json import Jsonb
 
 from . import db, workflow
 from .policy import LIMITS
-from .trace import Run
+from .trace import Run, audit
 
 log = logging.getLogger("worker")
 
@@ -25,10 +25,13 @@ async def process(run_id, user_id):
             await db.q(user, "update runs set state = %s, updated_at = now(),"
                              " status = case when status = 'running' then %s else status end where id = %s",
                        (Jsonb(state), status, run_id))
+            if status != "running":
+                return
     except Exception as e:
         log.exception("run %s", run_id)
         await db.q(user, "update runs set status = 'failed', updated_at = now() where id = %s", (run_id,))
         await run.emit("run_done", {"ok": False, "error": str(e)})
+        await audit(user["id"], "run", {"run": str(run_id), "mode": "agent", "ok": False, **await run.used()})
 
 
 async def main():

@@ -188,4 +188,10 @@ CASES = [
          and json.loads(fetch("result.json")) == {"강남": 270, "종로": 175, "부산": 170},
          {"answer": "", "events": [("run_done", {"ok": True})], "files": {"result.json": '{"강남": 270, "종로": 175, "부산": 170}'}},
          files=["매출.csv"]),
+    case("agent-03", "agent", "agent", "첨부한 여비규정에서 일비, 서울 숙박비 상한, 정산 기한을 정리해 answer.md로 작성해줘.",
+         lambda answer, events, fetch: any(t == "run_done" and d["ok"] for t, d in events)
+         and "[#" in (md := fetch("answer.md").decode()) and all(w in md for w in ("25,000", "120,000", "7일")),
+         {"answer": "", "events": [("run_done", {"ok": True})],
+          "files": {"answer.md": "일비: 25,000원, 서울 숙박비 상한: 120,000원, 정산 기한: 7일 [#1]"}},
+         files=["여비규정.txt"]),
 ]

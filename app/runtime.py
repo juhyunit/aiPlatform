@@ -12,6 +12,7 @@ from .tools import TOOLS
 MAX_TURNS = 12
 PREVIEW = 1500          # 도구 결과가 이보다 길면 파일로 저장하고 앞부분만 컨텍스트에 둔다
 ERROR_TAIL = 6000       # 오류 출력은 줄이지 않는다. 수정의 근거다. 이 길이를 넘을 때만 끝부분을 남긴다
+_TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
 
 
 async def _execute(run, allowed: list[str], call: dict, n: int) -> tuple[str, bool]:
@@ -20,7 +21,12 @@ async def _execute(run, allowed: list[str], call: dict, n: int) -> tuple[str, bo
     try:
         args = json.loads(call["arguments"])
         tool = TOOLS[name] if name in allowed else None
-        valid = bool(tool) and isinstance(args, dict) and set(tool["inputSchema"]["required"]) <= set(args) <= set(tool["inputSchema"]["properties"])
+        props = tool["inputSchema"]["properties"] if tool else {}
+        valid = (bool(tool) and isinstance(args, dict)
+                 and set(tool["inputSchema"]["required"]) <= set(args) <= set(props)
+                 and all(isinstance(v, _TYPES.get(props[k].get("type"), object))
+                         and not (props[k].get("type") == "integer" and isinstance(v, bool))
+                         for k, v in args.items()))
     except json.JSONDecodeError:
         args = call["arguments"]
     await run.emit("tool_call", {"tool": name, "arguments": args})
@@ -45,20 +51,29 @@ def _shrink(messages: list[dict], budget: int):
     for m in messages:
         if sum(context.tokens(x["content"]) for x in messages) <= budget:
             return
-        if m["role"] == "tool" and not m["content"].startswith("오류"):
+        if m["role"] == "tool" and not str(m["content"]).startswith("오류"):
             m["content"] = "(오래된 도구 결과는 비웠다)"
+
+
+def _with_state(msg: dict, state: str) -> dict:
+    content, suffix = msg["content"], "\n\n[작업 상태]\n" + state
+    if isinstance(content, list):
+        return {**msg, "content": [{"type": "text", "text": content[0]["text"] + suffix}, *content[1:]]}
+    return {**msg, "content": content + suffix}
 
 
 async def run_step(run, cands: list[dict], messages: list[dict], tools: list[str], *, mode: str,
                    reasoning: str = "off", state: str = "", on_token=None) -> str:
     """도구 호출이 없는 응답이 나올 때까지 돈다. 횟수 상한에 닿으면 도구 없이 한 번 더 불러 답을 받는다."""
     defs = [TOOLS[name] for name in tools]
-    max_tokens = P["max_output"][mode]
-    budget = cands[0]["capabilities"]["context"] - max_tokens
+    ctx = cands[0]["capabilities"]["context"]
+    limit = P["max_output"][mode]
+    budget = ctx - limit
     for turn in range(MAX_TURNS + 1):
         sent = messages
         if state and HARNESS["state_reinjection"]:      # 작업 상태를 매 호출 끝에 다시 넣는다
-            sent = [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + "\n\n[작업 상태]\n" + state}]
+            sent = [*messages[:-1], _with_state(messages[-1], state)]
+        max_tokens = max(64, min(limit, ctx - sum(context.tokens(m["content"]) for m in sent)))
         out = await gateway.chat(run, cands, sent, tools=defs if turn < MAX_TURNS else None, reasoning=reasoning,
                                  max_tokens=max_tokens, on_token=on_token)
         if not out["tool_calls"]:

@@ -98,12 +98,29 @@ async function loadSessions() {
 async function openSession(s) {
   session = s; images = [];
   $('#chips').replaceChildren(); showSession();
-  const rows = await (await api(`/api/sessions/${s.id}/messages`)).json();
-  $('main').classList.toggle('empty', !rows.length);
+  const [rows, runs] = await Promise.all([
+    (await api(`/api/sessions/${s.id}/messages`)).json(),
+    (await api('/api/runs')).json(),
+  ]);
+  const active = runs.find((r) => r.session_id === s.id && ['queued', 'running', 'waiting', 'paused'].includes(r.status));
+  $('main').classList.toggle('empty', !rows.length && !active);
   $('#messages').replaceChildren(...rows.map((m) => el('div', { className: 'msg ' + m.role },
     m.role === 'user' ? el('div', { className: 'text', textContent: m.content }) : el('div', { className: 'text', innerHTML: md(m.content) }))));
   $('#messages').scrollTop = $('#messages').scrollHeight;
-  loadSessions(); loadFiles();
+  loadSessions(); await loadFiles();
+  if (active) resumeRun(active);
+}
+
+async function resumeRun(r) {
+  const steps = el('details', { className: 'steps running', open: true }, el('summary', { textContent: '생각하는 중' }), el('ul'));
+  const view = { steps, text: el('div', { className: 'text' }), extra: el('div'), chips: el('div', { className: 'chips' }),
+    raw: '', request: { session_id: session.id, message: r.request || '' }, before: files, run: r.id, last: 0 };
+  $('#messages').append(
+    el('div', { className: 'msg user' }, el('div', { className: 'text', textContent: r.request || '' })),
+    el('div', { className: 'msg assistant' }, steps, view.text, view.extra, view.chips));
+  try {
+    await render(view, await api(`/api/runs/${r.id}/events`));
+  } catch (err) { line(view, err.message, 'bad'); settle(view, err.message, false); }
 }
 
 // 파일은 어디서든 눌러서 내려받는다: 머리줄의 파일 목록, 답 아래의 새 파일 칩

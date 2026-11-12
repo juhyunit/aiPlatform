@@ -56,11 +56,13 @@ def chunk(blocks: list[dict]) -> list[dict]:
             buf.append(b["text"])
             flush()
         else:
-            if buf and context.tokens("\n".join(buf)) + context.tokens(b["text"]) > CHUNK_TOKENS:
-                flush()
-            if not buf:
-                page = b["page"]
-            buf.append(b["text"])
+            parts = b["text"].splitlines() if context.tokens(b["text"]) > CHUNK_TOKENS else [b["text"]]
+            for part in (p for p in parts if p.strip()):
+                if buf and context.tokens("\n".join(buf)) + context.tokens(part) > CHUNK_TOKENS:
+                    flush()
+                if not buf:
+                    page = b["page"]
+                buf.append(part)
     flush()
     return chunks
 
@@ -69,16 +71,18 @@ async def index(user: dict, scope: str, name: str, grade: int, chunks: list[dict
                 session_id=None, groups: list[str] = ()) -> str:
     """문서 한 건을 색인한다. 임베딩 모델도 문서 등급으로 정책 필터를 거친다."""
     model, vectors = await gateway.embed([c["text"] for c in chunks], grade)
+    tsvs = [" ".join(keywords(c["heading"] + " " + c["text"])) for c in chunks]
     async with db.tx(user) as conn:
         doc_id = (await (await conn.execute(
             "insert into documents (scope, owner, session_id, name, grade, groups, embed_model)"
             " values (%s, %s, %s, %s, %s, %s, %s) returning id",
             (scope, user["id"], session_id, name, grade, list(groups), model))).fetchone())["id"]
-        for c, v in zip(chunks, vectors):
-            await conn.execute(
-                "insert into chunks (document_id, page, heading, text, tsv, embedding)"
-                " values (%s, %s, %s, %s, to_tsvector('simple', %s), %s::vector)",
-                (doc_id, c["page"], c["heading"], c["text"], " ".join(keywords(c["heading"] + " " + c["text"])), str(v)))
+        if chunks:
+            async with conn.cursor() as cur:
+                await cur.executemany(
+                    "insert into chunks (document_id, page, heading, text, tsv, embedding)"
+                    " values (%s, %s, %s, %s, to_tsvector('simple', %s), %s::vector)",
+                    [(doc_id, c["page"], c["heading"], c["text"], t, str(v)) for c, t, v in zip(chunks, tsvs, vectors)])
     return doc_id
 
 
@@ -90,7 +94,7 @@ def _params(user: dict, clear: int, session_id, org: bool) -> dict:
 async def search(user: dict, clear: int, query: str, session_id, org: bool, k: int = 8) -> list[dict]:
     """밀집 검색과 키워드 검색을 순위 융합(RRF)으로 합친다. clear는 답할 모델이 받을 수 있는 최고 등급이다."""
     _, [vec] = await gateway.embed([query], clear)
-    words = keywords(query) if HARNESS["keyword_search"] else []
+    words = list(dict.fromkeys(keywords(query))) if HARNESS["keyword_search"] else []
     return await db.q(user, _SEARCH, {**_params(user, clear, session_id, org), "vec": str(vec),
                                       "tsq": " | ".join(words) or None, "k": k})
 

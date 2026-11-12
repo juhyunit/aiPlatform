@@ -14,6 +14,8 @@ _MASK = [re.compile(p) for p in P["mask"]]
 
 
 def rank(grade: str) -> int:
+    if grade not in GRADES:
+        raise ValueError(f"올바르지 않은 데이터 등급입니다: {grade}")
     return GRADES.index(grade)
 
 

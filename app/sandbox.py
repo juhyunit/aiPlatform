@@ -41,15 +41,21 @@ async def run(session_id, argv: list[str], timeout: int = 60) -> tuple[int, str]
             out += chunk
         return out
 
-    try:
-        out = await asyncio.wait_for(read(), timeout)
-    except TimeoutError:
-        out = None
-    if out is None or len(out) > MAX_OUTPUT:
+    async def cleanup():
         with contextlib.suppress(ProcessLookupError):
             proc.kill()         # 읽기를 멈췄으므로 먼저 끊는다. 그대로 두면 출력을 쓰다 멈춰 있다
         await (await asyncio.create_subprocess_exec("docker", "rm", "-f", name, stdout=asyncio.subprocess.DEVNULL,
                                                     stderr=asyncio.subprocess.DEVNULL)).wait()
         await proc.wait()
+
+    try:
+        out = await asyncio.wait_for(read(), timeout)
+    except TimeoutError:
+        out = None
+    except BaseException:
+        await cleanup()
+        raise
+    if out is None or len(out) > MAX_OUTPUT:
+        await cleanup()
         return 124, f"실행 시간 {timeout}초를 넘겨 중단했습니다" if out is None else "출력이 1MB를 넘어 중단했습니다"
     return await proc.wait(), out.decode(errors="replace")

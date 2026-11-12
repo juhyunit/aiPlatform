@@ -44,7 +44,7 @@ def new_state(request: str, model: str) -> dict:
 async def _ask(run, cands, prompt: str, text: str, schema: dict) -> dict:
     out = await gateway.chat(run, cands, [{"role": "system", "content": prompts.load(prompt, cands[0]["id"])},
                                           {"role": "user", "content": text}], schema=schema, max_tokens=P["max_output"]["agent"])
-    return json.loads(out["content"])
+    return gateway.parse_json(out["content"])
 
 
 def _criteria(s: dict) -> str:
@@ -124,9 +124,14 @@ async def _citations(run) -> tuple[bool, str]:
     if not path.exists():
         return False, "answer.md가 없다"
     cited = {int(n) for n in re.findall(r"\[#(\d+)\]", path.read_text(encoding="utf-8"))}
-    found = {r["id"] for r in await db.q(run.user, "select id from chunks where id = any(%s)", (list(cited),))}
     if not cited:
         return False, "answer.md에 [#번호] 인용이 없다"
+    rows = await db.q(run.user, """
+        select c.id, d.name, c.page from chunks c join documents d on d.id = c.document_id
+        where c.id = any(%s) and d.grade <= %s and (d.session_id = %s or d.scope = 'org')
+    """, (list(cited), run.clear, run.session_id))
+    run.sources.update({r["id"]: r for r in rows})
+    found = {r["id"] for r in rows}
     return cited == found, "없는 인용: " + ", ".join(f"[#{n}]" for n in sorted(cited - found))
 
 
@@ -164,7 +169,7 @@ async def verify(run, cands, s):
             await run.emit("issue", {"profile": "Reviewer", "problems": [issue["problem"]], "confirmed": code != 0})
             if code:
                 failures.append((f"python {script}", f"{issue['problem']}\n{out}"))
-            else:   # 재현되지 않은 지적은 참고 의견으로만 넘긴다
+            elif issue["problem"] not in s["notes"]:   # 재현되지 않은 지적은 참고 의견으로만 넘긴다
                 s["notes"].append(issue["problem"])
     if not failures:
         s["phase"] = "reconcile"

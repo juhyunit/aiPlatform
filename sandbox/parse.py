@@ -27,7 +27,11 @@ def table(rows, page=None):
 
 def check_zip(path):
     """압축 폭탄 방지. 풀린 크기와 압축비에 상한을 둔다."""
-    infos = zipfile.ZipFile(path).infolist()
+    try:
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+    except zipfile.BadZipFile:
+        fail("손상된 압축 문서입니다")
     size = sum(i.file_size for i in infos)
     if size > MAX_UNZIPPED or size > MAX_RATIO * max(1, sum(i.compress_size for i in infos)):
         fail("압축을 풀었을 때 크기가 허용 범위를 넘습니다")
@@ -110,16 +114,16 @@ def hwpx(path):
         return "".join("".join(t.itertext()) for run in p if tag(run) == "run" for t in run if tag(t) == "t")
 
     blocks = []
-    archive = zipfile.ZipFile(path)
-    for name in sorted(n for n in archive.namelist() if n.startswith("Contents/section")):
-        for p in ElementTree.fromstring(archive.read(name)):
-            if tag(p) != "p":
-                continue
-            if own_text(p).strip():
-                blocks.append(block("paragraph", own_text(p)))
-            for tbl in (el for run in p if tag(run) == "run" for el in run if tag(el) == "tbl"):
-                blocks.append(table([[" ".join(own_text(q) for q in tc.iter() if tag(q) == "p").strip()
-                                      for tc in tr if tag(tc) == "tc"] for tr in tbl if tag(tr) == "tr"]))
+    with zipfile.ZipFile(path) as archive:
+        for name in sorted(n for n in archive.namelist() if n.startswith("Contents/section") and n.endswith(".xml")):
+            for p in ElementTree.fromstring(archive.read(name)):
+                if tag(p) != "p":
+                    continue
+                if own_text(p).strip():
+                    blocks.append(block("paragraph", own_text(p)))
+                for tbl in (el for run in p if tag(run) == "run" for el in run if tag(el) == "tbl"):
+                    blocks.append(table([[" ".join(own_text(q) for q in tc.iter() if tag(q) == "p").strip()
+                                          for tc in tr if tag(tc) == "tc"] for tr in tbl if tag(tr) == "tr"]))
     return blocks
 
 
@@ -134,4 +138,7 @@ if __name__ == "__main__":
     suffix = Path(path).suffix.lower()
     if suffix in (".docx", ".pptx", ".xlsx", ".hwpx"):
         check_zip(path)
-    print(json.dumps({"blocks": PARSERS.get(suffix, text)(path)}, ensure_ascii=False))
+    blocks = PARSERS.get(suffix, text)(path)
+    if not blocks:
+        fail("문서에서 읽을 수 있는 글자가 없습니다")
+    print(json.dumps({"blocks": blocks}, ensure_ascii=False))

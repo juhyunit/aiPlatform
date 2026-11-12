@@ -27,8 +27,19 @@ async def list_files(run) -> str:
     return "\n".join(f"{p.relative_to(root)} ({p.stat().st_size}바이트)" for p in files) or "파일이 없습니다"
 
 
+def _read_text(target) -> str:
+    data = target.read_bytes()
+    for enc in ("utf-8-sig", "cp949"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return data.decode("utf-8", errors="replace")
+
+
 async def read_file(run, path: str, start_line: int = 1) -> str:
-    lines = _path(run, path).read_text(encoding="utf-8").splitlines()
+    start_line = max(1, start_line)
+    lines = _read_text(_path(run, path)).splitlines()
     part = lines[start_line - 1:start_line + 199]
     more = f"\n… (전체 {len(lines)}줄. 이어 읽으려면 start_line={start_line + 200})" if start_line + 199 < len(lines) else ""
     return "\n".join(part) + more
@@ -44,8 +55,9 @@ async def write_file(run, path: str, content: str) -> str:
 
 
 async def run_python(run, code: str) -> str:
-    await write_file(run, ".agent/run.py", code)
-    status, out = await sandbox.run(run.session_id, ["python", ".agent/run.py"])
+    script = f".agent/run-{run.id}.py"
+    await write_file(run, script, code)
+    status, out = await sandbox.run(run.session_id, ["python", script])
     if status:
         raise RuntimeError(f"종료 코드 {status}\n{out}")
     return out or "(출력 없음)"
