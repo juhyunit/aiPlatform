@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- 아이콘은 Lucide(ISC) 한 세트, 한 굵기만 쓴다 -->
+<svg hidden>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-new" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+</svg>
+
+<form id="login" hidden>
+  <h1>AI Agent</h1>
+  <input name="id" placeholder="아이디" autocomplete="username" required>
+  <input name="password" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+  <button class="primary">로그인</button>
+  <p class="error" id="login-error"></p>
+</form>
+
+<div id="app" hidden>
+  <aside id="side">
+    <div class="side-top">
+      <strong>AI Agent</strong>
+      <button type="button" class="icon" id="collapse" title="사이드바 접기"><svg><use href="#i-panel"/></svg></button>
+    </div>
+    <button type="button" class="nav on" id="new"><svg><use href="#i-new"/></svg>새 채팅</button>
+    <h2>최근</h2>
+    <ul id="sessions"></ul>
+    <details id="memory">
+      <summary>기억</summary>
+      <form id="new-memory"><input name="text" placeholder="기억해 둘 선호나 사실" required></form>
+      <ul id="memories"></ul>
+    </details>
+    <p id="user"></p>
+  </aside>
+
+  <main class="empty">
+    <header>
+      <button type="button" class="icon" id="expand" title="사이드바 펴기"><svg><use href="#i-panel"/></svg></button>
+      <span id="title"></span>
+      <span id="grade" class="badge" hidden></span>
+      <details id="files" hidden>
+        <summary><svg><use href="#i-folder"/></svg>파일 <span id="file-count"></span></summary>
+        <ul id="file-list"></ul>
+      </details>
+    </header>
+
+    <section id="messages"></section>
+    <h1 id="hello">무엇을 도와드릴까요?</h1>
+
+    <form id="composer">
+      <div id="chips" class="chips"></div>
+      <textarea name="message" rows="1" placeholder="무엇이든 물어보세요" required></textarea>
+      <div class="bar">
+        <label class="icon" title="파일 첨부"><svg><use href="#i-plus"/></svg><input type="file" id="attach" multiple hidden></label>
+        <select name="mode" title="실행 모드">
+          <option value="auto">Auto</option><option value="quick">Quick</option>
+          <option value="thinking">Thinking</option><option value="agent">Agent</option>
+        </select>
+        <select name="model" title="모델"></select>
+        <select name="grade" title="이 대화의 데이터 등급. 대화를 시작하면 바꿀 수 없습니다"></select>
+        <label class="toggle"><input type="checkbox" name="search">사내 지식</label>
+        <button class="send" title="보내기"><svg><use href="#i-send"/></svg></button>
+      </div>
+    </form>
+    <p id="notice">AI가 생성한 답은 틀릴 수 있습니다. 검증한 범위는 답마다 표시됩니다.</p>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

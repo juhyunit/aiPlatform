@@ -1,0 +1,48 @@
+# 상시 프로세스 4개 중 3개(API 서버, 작업 워커, PostgreSQL). 모델 서버는 GPU가 있는 곳에서 따로 띄우고
+# config/models.yaml의 endpoint로 가리킨다. 실행 전에 .env.example을 .env로 복사해 값을 채운다.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD}
+      APP_DB_PASSWORD: ${DB_APP_PASSWORD}
+    volumes:
+      - ./app/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - db:/var/lib/postgresql/data
+    networks: [internal]          # DB는 밖으로 나가는 길도, 밖에서 들어오는 길도 없다
+
+  api: &app
+    build: .
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://app:${DB_APP_PASSWORD}@db/postgres
+      ADMIN_DATABASE_URL: postgresql://postgres:${DB_OWNER_PASSWORD}@db/postgres
+      SECRET_KEY: ${SECRET_KEY}
+      DATA_DIR: /data
+      SANDBOX_VOLUME: agent-platform-data             # 샌드박스 컨테이너에는 이 볼륨의 세션 폴더만 붙인다
+    volumes:
+      - ./config:/app/config:ro
+      - data:/data
+      - /var/run/docker.sock:/var/run/docker.sock     # 샌드박스 컨테이너를 띄운다
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [internal, default]
+    ports: ["8000:8000"]
+    depends_on: [db]
+
+  worker:
+    <<: *app
+    command: python -m app.worker
+    ports: []
+
+  sandbox:                        # 실행하지 않는다. 샌드박스 이미지를 빌드해 두기 위한 항목이다
+    build: {context: ., dockerfile: sandbox/Dockerfile}
+    image: agent-sandbox
+    entrypoint: ["true"]
+    network_mode: none
+
+networks:
+  internal: {internal: true}
+
+volumes:
+  db:
+  data: {name: agent-platform-data}

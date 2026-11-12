@@ -1,0 +1,7 @@
+pandas==3.1.1
+openpyxl==3.1.5
+python-docx==1.2.0
+python-pptx==1.0.2
+pypdfium2==5.15.2
+pytest==9.2.0
+ruff==0.17.4

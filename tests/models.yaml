@@ -1,0 +1,42 @@
+# 테스트용 레지스트리. 가짜 모델 서버를 가리킨다.
+models:
+  - id: small            # 도구 호출을 고유 형식으로 하는 내부 모델
+    engine: fake
+    endpoint: http://127.0.0.1:9100/small/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: test, license: test, sha256: ""}
+    capabilities: {vision: true, tools: native, reasoning: {"off": {x_reasoning: "off"}, high: {x_reasoning: high}}, context: 8192}
+    resources: {vram_gb: 6, quant: none}
+    eval: {}
+    status: active
+  - id: big              # 도구 호출을 JSON 스키마 제약 출력으로 하는 내부 모델. 장애 전환 대상
+    engine: fake
+    endpoint: http://127.0.0.1:9100/big/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: test, license: test, sha256: ""}
+    capabilities: {tools: schema, context: 8192}
+    resources: {vram_gb: 24, quant: none}
+    eval: {}
+    status: active
+  - id: cloud            # 외부 상용 모델 자리. clearance가 높아도 env_max(external)에 막힌다
+    engine: fake
+    endpoint: http://127.0.0.1:9100/cloud/v1
+    env: external
+    clearance: restricted
+    provenance: {developer: test, license: test, sha256: ""}
+    capabilities: {tools: native, context: 8192}
+    resources: {vram_gb: 0, quant: none}
+    eval: {}
+    status: active
+  - id: embedder
+    engine: fake
+    endpoint: http://127.0.0.1:9100/embedder/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: test, license: test, sha256: ""}
+    capabilities: {embedding: 1024}
+    resources: {vram_gb: 1, quant: none}
+    eval: {}
+    status: active

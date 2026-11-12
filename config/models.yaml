@@ -1,0 +1,30 @@
+# 모델 레지스트리 — 개발 PC(RTX 3060 Ti 8GB, llama.cpp) 기준
+# RunPod·사내 서버로 옮길 때 바뀌는 것은 endpoint다. 서버의 모델 이름은 id와 같게 띄운다.
+models:
+  - id: gemma-4-e4b
+    engine: llama.cpp
+    endpoint: http://host.docker.internal:8080/v1
+    env: internal               # internal | external
+    clearance: personal         # 이 모델이 받을 수 있는 최고 데이터 등급
+    provenance: {developer: Google, license: Apache-2.0, sha256: ""}   # 내려받은 GGUF의 SHA-256을 기입
+    capabilities:
+      vision: true              # llama-server를 --mmproj와 함께 띄웠을 때
+      tools: native             # native: 모델 고유 형식 | schema: JSON 스키마 제약 출력
+      reasoning:                # 표준 추론 강도 → 이 모델의 요청 파라미터
+        "off": {chat_template_kwargs: {enable_thinking: false}}
+        high: {chat_template_kwargs: {enable_thinking: true}}
+      context: 8192
+    resources: {vram_gb: 6, quant: gguf-q4_k_m}
+    eval: {}                    # 자체 평가셋 점수. 측정 후 기입
+    status: active
+
+  - id: kure-v1
+    engine: llama.cpp
+    endpoint: http://host.docker.internal:8081/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: 고려대 NLP&AI 연구실, license: MIT, sha256: ""}
+    capabilities: {embedding: 1024}
+    resources: {vram_gb: 1, quant: gguf}
+    eval: {}
+    status: active
