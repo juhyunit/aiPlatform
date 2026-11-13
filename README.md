@@ -42,7 +42,7 @@
 | 검증함 | 같은 테스트 전체를 네트워크를 끈 상태에서 실행해 통과(`scripts/test-offline.sh`) |
 | 검증함 | 두 이미지를 외부 색인 없이(`--network none`) 빌드. Docker Compose 배포 구성에서 브라우저로 로그인 → Quick → 첨부 + Thinking → Agent 승인·완료까지 실행 |
 | 검증함 | 500명 혼합 시나리오에서 API·DB 계층 오류 0건(아래 "부하 테스트") |
-| **검증 못 함** | **실제 LLM과의 연동.** 개발한 환경에는 GPU가 없고 모델을 내려받을 수 없어, OpenAI 호환 API의 모양을 흉내 낸 가짜 모델 서버(`tests/fake_model.py`)로만 시험했습니다. llama.cpp·vLLM의 스트리밍 조각, 도구 호출, `<think>` 태그·코드 블록이 섞인 JSON 스키마 출력에 대한 방어 처리를 `app/gateway.py`에 넣어 두었으나, 개발 PC에서 실제 모델을 붙여 가장 먼저 확인해야 합니다 |
+| **검증 못 함** | **실제 LLM과의 연동.** 개발한 환경에는 GPU가 없고 모델을 내려받을 수 없어, OpenAI 호환 API의 모양을 흉내 낸 가짜 모델 서버(`tests/fake_model.py`)로만 시험했습니다. llama.cpp·vLLM의 스트리밍 조각, 도구 호출, `<think>` 태그·코드 블록이 섞인 JSON 스키마 출력에 대한 방어 처리를 `app/gateway.py`에 넣어 두었으나, 개발 PC에서 실제 모델을 붙여 가장 먼저 확인해야 합니다. 2026-11-13에 CPU 구성으로 첫 확인을 했습니다: [docs/laptop-cpu.md](docs/laptop-cpu.md) |
 | 검증 못 함 | 답변 품질. 평가셋 점수는 실제 모델을 붙여야 나옵니다 |
 
 ## 착수 전 결정 사항의 반영
@@ -62,6 +62,8 @@ Agent 작업은 동시 실행 수에 상한을 두고 큐에 넣으므로(`limit
 ## 개발 PC에서 실행하기
 
 필요한 것: Docker(26 이상), llama.cpp, NVIDIA 드라이버. Windows라면 WSL2 안에서 진행합니다.
+
+GPU가 없는 노트북이라면 모델 서버까지 CPU로 띄우는 [docs/laptop-cpu.md](docs/laptop-cpu.md)를 따릅니다(`scripts/laptop-up.sh` 한 번으로 기동).
 
 **1. 모델 서버 (GPU가 있는 쪽).** 생성 모델과 임베딩 모델을 서로 다른 프로세스로 띄웁니다. 서버의 모델 이름(`--alias`)은 `config/models.yaml`의 `id`와 같아야 합니다.
 

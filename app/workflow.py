@@ -164,8 +164,13 @@ async def verify(run, cands, s):
     if not failures and HARNESS["reviewer"]:    # 작업 과정을 보지 않은 새 컨텍스트에서 결과물만 본다
         for n, issue in enumerate((await _ask(run, cands, "reviewer", f"완료 조건:\n{_criteria(s)}\n\n결과물:\n{_artifacts(run, cands)}", REVIEW))["issues"]):
             script = f".agent/review_{s['rounds']}_{n}.py"
-            await tools.write_file(run, script, issue["check"])
-            code, out = await sandbox.run(run.session_id, ["python", script])
+            try:        # 파이썬이 아닌 재현 코드(셸 명령 등)는 문법 오류로 끝날 뿐 아무것도 재현하지 못한다. 실행하지 않고 참고 의견으로 돌린다
+                compile(issue["check"], script, "exec")
+            except (SyntaxError, ValueError):
+                code, out = 0, ""
+            else:
+                await tools.write_file(run, script, issue["check"])
+                code, out = await sandbox.run(run.session_id, ["python", script])
             await run.emit("issue", {"profile": "Reviewer", "problems": [issue["problem"]], "confirmed": code != 0})
             if code:
                 failures.append((f"python {script}", f"{issue['problem']}\n{out}"))

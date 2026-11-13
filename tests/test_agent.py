@@ -63,12 +63,15 @@ def test_reviewer_issue_counts_only_when_its_check_reproduces(alice):
     abs_add = "def add(a, b):\n    return abs(a) + abs(b)\n"
     review = {"json": {"issues": [
         {"problem": "음수를 더하면 틀린다", "check": "from calc import add\nassert add(-1, 1) == 0"},
-        {"problem": "함수에 설명이 없다", "check": "pass"}]}}
+        {"problem": "함수에 설명이 없다", "check": "pass"},
+        # 소형 모델이 파이썬 대신 셸 명령을 쓰는 경우. 문법 오류는 재현이 아니다(실제 Gemma 4 E4B에서 나온 모양)
+        {"problem": "함수 이름을 확인할 수 없다", "check": "python -c \"from calc import add; print(add.__name__)\""}]}}
     run, _ = start(alice, alice.session(), SPEC, PLAN, write("calc.py", abs_add), write("tests/test_calc.py", TEST), {"content": "1차"},
                    review, write("calc.py", GOOD), {"content": "고쳤다."}, NO_ISSUES)
     evs = alice.control(run, "approve")
     issues = [d for d in of(evs, "issue") if d.get("profile") == "Reviewer"]
-    assert [(d["problems"][0], d["confirmed"]) for d in issues] == [("음수를 더하면 틀린다", True), ("함수에 설명이 없다", False)]
+    assert [(d["problems"][0], d["confirmed"]) for d in issues] == [
+        ("음수를 더하면 틀린다", True), ("함수에 설명이 없다", False), ("함수 이름을 확인할 수 없다", False)]
     done = of(evs, "run_done")[0]
     assert done["ok"] and "참고(LLM 검토 의견" in done["report"] and "- 함수에 설명이 없다" in done["report"]
     reviewer_call = next(c for c in model_calls() if "Reviewer" in c["messages"][0]["content"])

@@ -1,0 +1,32 @@
+# 모델 레지스트리 — GPU 없는 노트북(CPU 전용) 시험용. docker-compose.cpu.yml이 MODELS_FILE로 이 파일을 쓴다.
+# 모델 서버는 같은 compose 안의 llm·embed 컨테이너(llama.cpp CPU 빌드)다. 서버의 모델 이름(--alias)은 id와 같다.
+# 개발 PC 기준 파일(models.yaml)과 다른 점: endpoint, 양자화(Q4_0), 비전 끔(첫 시험은 텍스트만, 메모리·속도 절약).
+models:
+  - id: gemma-4-e4b
+    engine: llama.cpp
+    endpoint: http://llm:8080/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: Google, license: Apache-2.0, source: ggml-org/gemma-4-E4B-it-GGUF, sha256: ""}
+    capabilities:
+      vision: false             # 켜려면 docker-compose.cpu.yml의 --no-mmproj를 지우고 true로
+      tools: native
+      reasoning:
+        "off": {chat_template_kwargs: {enable_thinking: false}}
+        high: {chat_template_kwargs: {enable_thinking: true}}
+      context: 8192
+    resources: {vram_gb: 0, quant: gguf-q4_0}
+    eval: {}
+    status: active
+
+  - id: kure-v1
+    engine: llama.cpp
+    endpoint: http://embed:8081/v1
+    env: internal
+    clearance: personal
+    # nlpai-lab 공식 GGUF가 없어 제3자 변환본(Bingsu/KURE-v1-Q8_0-GGUF)을 쓴다. 출처 심사 전 시험용
+    provenance: {developer: 고려대 NLP&AI 연구실, license: MIT, source: Bingsu/KURE-v1-Q8_0-GGUF, sha256: ""}
+    capabilities: {embedding: 1024}
+    resources: {vram_gb: 0, quant: gguf-q8_0}
+    eval: {}
+    status: active

@@ -1,0 +1,51 @@
+# GPU 없는 노트북에서 시험하기 위한 덧붙임 파일. 모델 서버(llama.cpp CPU 빌드) 2개를 같은 compose 안에 띄운다.
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build
+# 처음 띄울 때 llm·embed 컨테이너가 Hugging Face에서 GGUF를 받아 models 볼륨에 둔다(약 5.3GB, 인터넷 필요).
+# 이후에는 볼륨에 있는 파일을 쓰므로 인터넷 없이 뜬다.
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: >-
+      -hf ggml-org/gemma-4-E4B-it-GGUF:Q4_0 --no-mmproj --alias gemma-4-e4b
+      -c ${LLM_CTX:-8192} -np 1 -t ${LLM_THREADS:-8} -tb ${LLM_THREADS_BATCH:-12}
+      --host 0.0.0.0 --port 8080
+    environment:
+      LLAMA_CACHE: /models
+    volumes: [models:/models]
+    ports: ["127.0.0.1:8080:8080"]    # 확인용. 컨테이너끼리는 http://llm:8080 으로 부른다
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30m               # 첫 실행은 모델을 내려받는 시간이 든다
+    restart: unless-stopped
+
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: >-
+      -hf Bingsu/KURE-v1-Q8_0-GGUF --alias kure-v1 --embedding --pooling cls
+      -c 8192 -b 8192 -ub 8192 -np 1 -t ${EMBED_THREADS:-4}
+      --host 0.0.0.0 --port 8081
+    environment:
+      LLAMA_CACHE: /models
+    volumes: [models:/models]
+    ports: ["127.0.0.1:8081:8081"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10m
+    restart: unless-stopped
+
+  api:
+    environment:
+      MODELS_FILE: /app/config/models.cpu.yaml
+
+  worker:
+    environment:
+      MODELS_FILE: /app/config/models.cpu.yaml
+
+volumes:
+  models:
