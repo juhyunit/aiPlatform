@@ -1,0 +1,27 @@
+# NVIDIA GPU(개발 PC의 RTX 3060 Ti 8GB 기준)용 덧붙임 파일. CPU 덧붙임 파일 위에 한 겹 더 얹는다.
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml -f docker-compose.gpu.yml up -d --build
+# 바뀌는 것: llm 컨테이너를 CUDA 빌드로, 모든 층을 GPU에(-ngl 99), 비전용 mmproj를 함께 받음, 모델 목록 파일.
+# embed는 CPU 그대로 둔다(VRAM을 생성 모델에 양보). 필요한 것: Windows NVIDIA 드라이버, WSL 안의 nvidia-container-toolkit.
+# 아직 실제 GPU에서 띄워 보지 않았다. VRAM이 모자라면 LLM_CTX=4096 또는 --no-mmproj(그때는 models.gpu.yaml의 vision을 false로).
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    command: >-
+      -hf ggml-org/gemma-4-E4B-it-GGUF:Q4_0 --alias gemma-4-e4b
+      -c ${LLM_CTX:-8192} -np 1 -ngl 99
+      --host 0.0.0.0 --port 8080
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  api:
+    environment:
+      MODELS_FILE: /app/config/models.gpu.yaml
+
+  worker:
+    environment:
+      MODELS_FILE: /app/config/models.gpu.yaml

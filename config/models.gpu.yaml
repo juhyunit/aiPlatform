@@ -1,0 +1,32 @@
+# 모델 레지스트리 — 개발 PC(RTX 3060 Ti 8GB)에서 docker-compose.gpu.yml로 띄울 때. MODELS_FILE로 이 파일을 쓴다.
+# CPU 구성(models.cpu.yaml)과 다른 점: 비전 켬(llm이 mmproj를 함께 올림), vram_gb.
+# 아직 실제 GPU에서 확인하지 않았다. 확인 뒤 provenance.sha256과 eval을 채운다.
+models:
+  - id: gemma-4-e4b
+    engine: llama.cpp
+    endpoint: http://llm:8080/v1
+    env: internal
+    clearance: personal
+    provenance: {developer: Google, license: Apache-2.0, source: ggml-org/gemma-4-E4B-it-GGUF, sha256: ""}
+    capabilities:
+      vision: true              # llm이 mmproj와 함께 떠 있을 때. --no-mmproj로 띄우면 false로
+      tools: native
+      reasoning:
+        "off": {chat_template_kwargs: {enable_thinking: false}}
+        high: {chat_template_kwargs: {enable_thinking: true}}
+      context: 8192
+    resources: {vram_gb: 6, quant: gguf-q4_0}
+    eval: {}
+    status: active
+
+  - id: kure-v1
+    engine: llama.cpp
+    endpoint: http://embed:8081/v1
+    env: internal
+    clearance: personal
+    # nlpai-lab 공식 GGUF가 없어 제3자 변환본(Bingsu/KURE-v1-Q8_0-GGUF)을 쓴다. 출처 심사 전 시험용
+    provenance: {developer: 고려대 NLP&AI 연구실, license: MIT, source: Bingsu/KURE-v1-Q8_0-GGUF, sha256: ""}
+    capabilities: {embedding: 1024}
+    resources: {vram_gb: 0, quant: gguf-q8_0}
+    eval: {}
+    status: active

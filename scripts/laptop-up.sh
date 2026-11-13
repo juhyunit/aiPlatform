@@ -2,10 +2,11 @@
 # GPU 없는 노트북에서 플랫폼 전체(모델 서버 포함)를 한 번에 띄운다. WSL2(Ubuntu) 또는 Linux에서 실행한다.
 #   scripts/laptop-up.sh                      띄우기만
 #   scripts/laptop-up.sh hong 'S3cret!'       띄운 뒤 계정 hong(internal 등급)을 만든다
+#   GPU=1 scripts/laptop-up.sh                NVIDIA GPU가 있는 PC에서 모델 서버를 GPU로(docker-compose.gpu.yml)
 # 처음 한 번은 인터넷이 필요하다: 파이썬 휠, Docker 이미지, 모델 GGUF(약 5.3GB)를 받는다.
 set -e
 cd "$(dirname "$0")/.."
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.cpu.yml"
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.cpu.yml${GPU:+ -f docker-compose.gpu.yml}"
 
 docker info >/dev/null 2>&1 || { echo "Docker에 연결할 수 없습니다. Docker Desktop(WSL 통합 켜기) 또는 docker 서비스를 먼저 띄우세요."; exit 1; }
 

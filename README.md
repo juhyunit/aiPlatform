@@ -64,6 +64,7 @@ Agent 작업은 동시 실행 수에 상한을 두고 큐에 넣으므로(`limit
 필요한 것: Docker(26 이상), llama.cpp, NVIDIA 드라이버. Windows라면 WSL2 안에서 진행합니다.
 
 GPU가 없는 노트북이라면 모델 서버까지 CPU로 띄우는 [docs/laptop-cpu.md](docs/laptop-cpu.md)를 따릅니다(`scripts/laptop-up.sh` 한 번으로 기동).
+NVIDIA GPU가 있는 PC에서 같은 방식으로 띄우려면 `GPU=1 scripts/laptop-up.sh`(`docker-compose.gpu.yml`, `config/models.gpu.yaml`. 아직 실제 GPU에서 확인하지 못함). 구조와 동작을 처음부터 따라가는 학습 자료는 [docs/study-guide.html](docs/study-guide.html)입니다(브라우저로 열기).
 
 **1. 모델 서버 (GPU가 있는 쪽).** 생성 모델과 임베딩 모델을 서로 다른 프로세스로 띄웁니다. 서버의 모델 이름(`--alias`)은 `config/models.yaml`의 `id`와 같아야 합니다.
 
